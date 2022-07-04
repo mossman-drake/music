@@ -293,9 +293,13 @@ if __name__ == '__main__':
     frequencies = generate_axis(min, max, inv_heartbeat(82.4, 0.01, 0.5, 0.1))
     # step = 0.01
     # frequencies = np.linspace(start=min, stop=max, num=int((max-min)/step+1))
-    magnitudes = np.absolute(np.real([fourier_single_point(sounds['mono_data'], SAMPLES_PER_SEC, f) for f in frequencies]))
+    fourier_transform = [fourier_single_point(sounds['mono_data'], SAMPLES_PER_SEC, f) for f in frequencies]
+    phase_magnitudes = np.imag(fourier_transform)
+    freq_magnitudes = np.absolute(np.real(fourier_transform))
     graph_samples(
         {'sample': sounds['mono_data'], 'x0': 500},
-        {'sample': magnitudes, 'frequencies': frequencies},
+        {'sample': freq_magnitudes, 'frequencies': frequencies},
+        {'sample': phase_magnitudes, 'frequencies': frequencies},
         {'sample': np.divide(1, np.diff(frequencies)), 'frequencies': frequencies[:-1]})
     # graph_samples({'sample':np.fromfunction(lambda x: inv_heartbeat(25, 0.01)(x/10), (1000,)), 'frame_rate':10})
+    print('end of program')
