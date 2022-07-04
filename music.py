@@ -42,6 +42,7 @@ wave_file_names = [high_e_file_name, low_E_file_name]
 #     wave_object = sa.WaveObject.from_wave_file(wave_file_name)
 #     print(len(wave_object.audio_data))
 #     play_obj = wave_object.play()
+#     print(wave_file_name, ' starting')
 #     play_obj.wait_done()
 
 # wave_object = sa.WaveObject.from_wave_file(high_e_file_name)
@@ -55,31 +56,27 @@ wave_file_names = [high_e_file_name, low_E_file_name]
 '''
 from timeit import default_timer as timer
 
-def graph_samples(audio_samples, frame_rate=48000):
+SAMPLES_PER_SEC = 48000
+OCTAVE = 12
+HALF_STEP = 2 ** (1/OCTAVE)
+sounds = {}
+
+def graph_samples(*audio_samples):
     plt.title("Title")
     plt.xlabel("Time (seconds)")
     plt.ylabel("Amplitude")
-    # for (sound_name, sound_file_name, alpha) in [
-    #         ('high_e', high_e_file_name, 1.0),
-    #         ('low_E', low_E_file_name, 0.5)
-    # ]:
-
-    #     soundwave = wave_file.readframes(-1)
-    #     print(wave_file.getsampwidth())
-    #     # print(high_e_soundwave)
-    #     sound_data_array = np.frombuffer(soundwave, dtype='int32')
-    #     # print(sound_data_array[:10])
-    x_val = 0
     for audio_sample in audio_samples:
-        x_axis = np.linspace(start=x_val, stop=x_val+len(audio_sample)/frame_rate, num=len(audio_sample))
-        x_val = x_val+len(audio_sample)/frame_rate
-        plt.plot(x_axis, audio_sample, alpha=0.5) # label=sound_name, marker='.'
-
+        sample_dict = dict(audio_sample)
+        sample = sample_dict['sample']
+        x_axis = sample_dict.get('frequencies',
+            np.linspace(start=sample_dict.get('x0', 0),
+            stop=sample_dict.get('x0', 0)+len(sample)/sample_dict.get('frame_rate', SAMPLES_PER_SEC),
+            num=len(sample)))
+        plt.plot(x_axis, sample, alpha=0.5) # label=sound_name, marker='.'
+    plt.autoscale()
     plt.legend()
     plt.show()
 
-# data = np.fromiter([3,1,4,1,5,9,2,6,5,3,5,8,9,7,9,3,2,3,8,4,6,2,6,4,3,3,8,3,2,7,9,5,0,2,8,8,4,1,9,7,1,6,9], dtype='int16')
-# data = np.fromiter([0, 1, 2, 3, 4, 5, 6, 6, 6, 4, 3, 2, 0, -1, -2, -4, -5, -5, -5, -3, -1, 1, 3, 6, 9, 9, 6, 5, 3, 0], dtype='int16')
 
 def trim(sample, length, fade_out_length):
     trimmed_sample = sample.astype(dtype='float')[:length]
@@ -127,17 +124,8 @@ def compress_sample(data, ratio, use_slow_algorithm=False):
         return rounded_sample
 
 def add_samples(*samples):
-    print([len(s) for s in samples])
-    print([max(s) for s in samples])
     max_len = max([len(s) for s in samples])
-    sum_sound = np.zeros(max_len, dtype='int16')
-    for sample in samples:
-        zero_padded_sample = np.append(sample, np.zeros(max_len-len(sample), dtype='int16'))
-        sum_sound = np.add(sum_sound, zero_padded_sample)
-        print([len(s) for s in [sample, zero_padded_sample, sum_sound]])
-        print([max(s) for s in [sample, zero_padded_sample, sum_sound]])
-        graph_samples([sample, zero_padded_sample, sum_sound])
-    return sum_sound
+    return sum([np.append(sample, np.zeros(max_len-len(sample), dtype='int16')) for sample in samples])
 
 def stereo_to_mono(audio_data):
     data = np.frombuffer(audio_data, dtype='int16')
@@ -176,6 +164,7 @@ mono_wave = guitar_string
 
 sounds['mono_data'] = np.frombuffer(guitar_string.audio_data, dtype='int16')
 
+
 note_names = ['C', '(C♯/D♭)', 'D', '(D♯/E♭)', 'E', 'F', '(F♯/G♭)', 'G', '(G♯/A♭)', 'A', '(A♯/B♭)', 'B']
 scale = [sum([2,2,1,2,2,2,1][:i]) for i in range(0, 8)]
 print('Starting scale loop')
@@ -184,7 +173,7 @@ lap(False)
 initial_octave = 2
 initial_note = 4
 
-# [*[note-12 for note in scale], *(scale[1:]),*[note+12 for note in scale[1:]]]
+[*[note-12 for note in scale], *(scale[1:]), *[note+12 for note in scale[1:]]]
 for half_steps in np.arange(0, 24):
     note_number = (initial_note+half_steps) % 12
     octave_number = initial_octave + math.floor((initial_note+half_steps) / 12)
@@ -208,15 +197,105 @@ for half_steps in np.arange(0, 24):
         print(f'playing {note_names[note_number]}{octave_number}')
         play_obj = guitar_string.play()
         previously_played = play_obj
-    
-# for sound in [sounds['C3'], sounds['E3'],sounds['G3']]:
+
+# three_note_chord_spacings = []
+# for biggest_spacing in range(1, OCTAVE):
+#     min_first_spacing = max(1,OCTAVE-biggest_spacing*2)
+#     for first_spacing in range(min_first_spacing, OCTAVE-biggest_spacing-min_first_spacing+(0 if 1<min_first_spacing<=OCTAVE-biggest_spacing*2 else 1)):
+#         three_note_chord_spacings.append((first_spacing, OCTAVE-biggest_spacing-first_spacing, biggest_spacing))
+
+# for spacing_0 in range(1, OCTAVE):
+#     for spacing_1 in range(1, OCTAVE-spacing_0):
+#         potential_spacing = (spacing_0, spacing_1, OCTAVE-spacing_0-spacing_1)
+#         if min(potential_spacing) > 0 and not np.any([
+#             rotation in three_note_chord_spacings for rotation in [
+#                 (*potential_spacing[i:], *potential_spacing[:i]) for i in range(len(potential_spacing))
+#             ]
+#         ]):
+#             three_note_chord_spacings.append(potential_spacing)
+# print(three_note_chord_spacings)
+# print(len(three_note_chord_spacings))
+
+
+# sounds['Emaj'] = add_samples(sounds['E3'], sounds['(G♯/A♭)3'], sounds['B3'])
+# sounds['Cmin'] = add_samples(sounds['C3'], sounds['(D♯/E♭)3'], sounds['G3'])
+# for sound in [sounds['Emaj']]: #, sounds['Cmin']
 #     play_and_wait(trim(sound, 
-#         int(0.5*SAMPLES_PER_SEC),
+#         int(1*SAMPLES_PER_SEC),
 #         int(0.1 * SAMPLES_PER_SEC)
 #     ))
-sounds['Cmaj'] = add_samples(sounds['C3'], sounds['E3'], sounds['G3'])
-for sound in [sounds['C3'], sounds['E3'], sounds['G3'], sounds['Cmaj']]:
-    play_and_wait(sound)
+# graph_samples(sounds['Cmin'])
 
-if previously_played:
-    previously_played.wait_done()
+
+# import random
+# random.shuffle(three_note_chord_spacings)
+
+# for spacing in three_note_chord_spacings:
+#     modified_spacing = [i+12 for i in [0, *(np.cumsum(spacing)[:-1])]]
+#     chord = add_samples(*[
+#         compress_sample(
+#             sounds['mono_data'],
+#             HALF_STEP**half_steps
+#         ) for half_steps in modified_spacing
+#     ])
+#     # print(spacing)
+#     play_and_wait(trim(chord,
+#         int(2*SAMPLES_PER_SEC),
+#         int(0.3 * SAMPLES_PER_SEC)
+#     ))
+#     print(modified_spacing)
+
+# if previously_played:
+#     previously_played.wait_done()
+
+from scipy import integrate
+import cmath
+import numpy
+
+
+'''
+Real -> Complex
+Fourier(E) = Integral{-inf,inf} signal(x) * e^(-2i * pi * E *  x) dx
+
+I think the real component of the result it a magnitude while the
+imaginary component is a phase.
+
+For this version of the fourier, I will integrate over expanse of the entire signal function
+but for only a single frequency.
+'''
+def fourier_single_point(signal_series, sample_rate, frequency):
+    x_vals = np.linspace(start=0, stop=len(signal_series)/sample_rate, num=len(signal_series))
+    exponent = x_vals * -2j * math.pi * frequency
+    fourier_internals = np.multiply(signal_series, numpy.exp(exponent))
+    magnitude = integrate.trapezoid(fourier_internals, dx=1/sample_rate)
+    print(f'frequency: {frequency}\t magnitude: {magnitude}')
+    return magnitude
+
+def generate_axis(start, stop, density_function):
+    x = start
+    axis = []
+    while x < stop:
+        axis.append(x)
+        x += density_function(x)
+    return np.array(axis)
+
+def heartbeat(beat_period, low_value=0, high_value=1, pwm=1):
+    f = beat_period
+    return lambda x: (((abs((x + f/2) % f - f/2) * pwm) ** 2 + 1) ** -1) * (high_value - low_value) + low_value
+
+def inv_heartbeat(beat_period, low_value=0, high_value=1, pwm=1):
+    return lambda x: high_value - heartbeat(beat_period, 0, high_value-low_value, pwm)(x)
+
+if __name__ == '__main__':
+    # play_and_wait(sounds['mono_data'])
+    min = 80
+    max = 400
+    frequencies = generate_axis(min, max, inv_heartbeat(82.4, 0.01, 0.5, 0.1))
+    # step = 0.01
+    # frequencies = np.linspace(start=min, stop=max, num=int((max-min)/step+1))
+    magnitudes = np.absolute(np.real([fourier_single_point(sounds['mono_data'], SAMPLES_PER_SEC, f) for f in frequencies]))
+    graph_samples(
+        {'sample': sounds['mono_data'], 'x0': 500},
+        {'sample': magnitudes, 'frequencies': frequencies},
+        {'sample': np.divide(1, np.diff(frequencies)), 'frequencies': frequencies[:-1]})
+    # graph_samples({'sample':np.fromfunction(lambda x: inv_heartbeat(25, 0.01)(x/10), (1000,)), 'frame_rate':10})
