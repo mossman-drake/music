@@ -273,7 +273,7 @@ but for only a single frequency.
 def fourier_single_point(signal_series, sample_rate, frequency):
     x_vals = np.linspace(start=0, stop=len(signal_series)/sample_rate, num=len(signal_series))
     exponent = x_vals * -2j * math.pi * frequency
-    fourier_internals = np.multiply(signal_series, numpy.exp(exponent))
+    fourier_internals = np.multiply(signal_series, np.exp(exponent))
     magnitude = integrate.trapezoid(fourier_internals, dx=1/sample_rate)
     # print(f'frequency: {frequency}\t magnitude: {magnitude}')
     return magnitude
