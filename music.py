@@ -20,7 +20,10 @@ import math
 
 high_e_file_name = "./guitar_open_high_e_16bit.wav"
 low_E_file_name = "./guitar_open_low_E_16bit.wav"
-wave_file_names = [high_e_file_name, low_E_file_name]
+piano_key_e2_name = "./piano_key_e2.wav"
+piano_key_e3_name = "./piano_key_e3.wav"
+piano_key_e4_name = "./piano_key_e4.wav"
+wave_file_names = [high_e_file_name, low_E_file_name, piano_key_e2_name, piano_key_e3_name, piano_key_e4_name]
 
 # def get_sound_data_array(wave_file_name):
 #     wave_file = wave.open(wave_file_name, 'r')
@@ -156,14 +159,18 @@ SAMPLES_PER_SEC = 48000
 HALF_STEP = 2 ** (1.0/12.0)
 sounds = {}
 
-guitar_string = sa.WaveObject.from_wave_file(low_E_file_name)
+guitar_string = sa.WaveObject.from_wave_file(high_e_file_name)
 sounds['stereo_data'] = np.frombuffer(guitar_string.audio_data, dtype='int16')
 guitar_string.audio_data = stereo_to_mono(guitar_string.audio_data)
 guitar_string.num_channels = 1
 mono_wave = guitar_string
-
 sounds['mono_data'] = np.frombuffer(guitar_string.audio_data, dtype='int16')
 
+piano_key = sa.WaveObject.from_wave_file(piano_key_e4_name)
+# sounds['piano_stereo'] = np.frombuffer(piano_key.audio_data, dtype='int16')
+# piano_key.audio_data = stereo_to_mono(guitar_string.audio_data)
+piano_key.num_channels = 1
+sounds['piano_mono'] = compress_sample(np.array(np.frombuffer(piano_key.audio_data, dtype='int16')/16, np.int16),330.2/353.3)
 
 note_names = ['C', '(C♯/D♭)', 'D', '(D♯/E♭)', 'E', 'F', '(F♯/G♭)', 'G', '(G♯/A♭)', 'A', '(A♯/B♭)', 'B']
 scale = [sum([2,2,1,2,2,2,1][:i]) for i in range(0, 8)]
@@ -268,7 +275,7 @@ def fourier_single_point(signal_series, sample_rate, frequency):
     exponent = x_vals * -2j * math.pi * frequency
     fourier_internals = np.multiply(signal_series, numpy.exp(exponent))
     magnitude = integrate.trapezoid(fourier_internals, dx=1/sample_rate)
-    print(f'frequency: {frequency}\t magnitude: {magnitude}')
+    # print(f'frequency: {frequency}\t magnitude: {magnitude}')
     return magnitude
 
 def generate_axis(start, stop, density_function):
@@ -276,7 +283,8 @@ def generate_axis(start, stop, density_function):
     axis = []
     while x < stop:
         axis.append(x)
-        x += density_function(x)
+        step = density_function(x)
+        x += step
     return np.array(axis)
 
 def heartbeat(beat_period, low_value=0, high_value=1, pwm=1):
@@ -287,19 +295,45 @@ def inv_heartbeat(beat_period, low_value=0, high_value=1, pwm=1):
     return lambda x: high_value - heartbeat(beat_period, 0, high_value-low_value, pwm)(x)
 
 if __name__ == '__main__':
-    # play_and_wait(sounds['mono_data'])
-    min = 80
-    max = 400
-    frequencies = generate_axis(min, max, inv_heartbeat(82.4, 0.01, 0.5, 0.1))
-    # step = 0.01
-    # frequencies = np.linspace(start=min, stop=max, num=int((max-min)/step+1))
-    fourier_transform = [fourier_single_point(sounds['mono_data'], SAMPLES_PER_SEC, f) for f in frequencies]
-    phase_magnitudes = np.imag(fourier_transform)
-    freq_magnitudes = np.absolute(np.real(fourier_transform))
+    # play_and_wait(sounds['mono_data'][:SAMPLES_PER_SEC*2])
+    # play_and_wait(sounds['piano_mono'][:SAMPLES_PER_SEC*2])
+
+    min_val = 0
+    max_val = 400
+    step = 0.1
+    frequencies = np.linspace(start=min_val, stop=max_val, num=int((max_val-min_val)/step+1))
+    # min_step = inv_heartbeat(330.2, 0.01, 0.5, 0.05)
+        # lambda x: min(
+        # inv_heartbeat(353.3, 0.01, 0.5, 0.03)(x),
+
+    # frequencies = generate_axis(min_val, max_val, min_step)
+    # buckets = []
+    # for sample in [sounds['mono_data'][:SAMPLES_PER_SEC], sounds['piano_mono'][:SAMPLES_PER_SEC]]:
+    #     # sample = sounds['mono_data'][:SAMPLES_PER_SEC]
+    #     # sample = sounds['mono_data']
+    #     bucket_width = int(SAMPLES_PER_SEC/10)
+    #     # bucket_width = len(sample)
+    #     buckets.extend([
+    #         {'sample':sample[i*bucket_width: (i+1)*bucket_width]}
+    #         for i in range(int(len(sample)/bucket_width))
+    #     ])
+    # for i, bucket in enumerate(buckets):
+    #     fourier_transform = [fourier_single_point(bucket['sample'], SAMPLES_PER_SEC, f) for f in frequencies]
+    #     bucket['phases'] = np.imag(fourier_transform)
+    #     bucket['amplitudes'] = np.absolute(np.real(fourier_transform))
+    #     print(i)
+    x_vals = np.linspace(start=0, stop=1.5, num=int(SAMPLES_PER_SEC*1.5))
+    sample = np.sin(314*(2*np.pi)*x_vals)
+    fourier_transform = [fourier_single_point(sample, SAMPLES_PER_SEC, f) for f in frequencies]
+
     graph_samples(
-        {'sample': sounds['mono_data'], 'x0': 500},
-        {'sample': freq_magnitudes, 'frequencies': frequencies},
-        {'sample': phase_magnitudes, 'frequencies': frequencies},
-        {'sample': np.divide(1, np.diff(frequencies)), 'frequencies': frequencies[:-1]})
+        {'sample': sample, 'frequencies': x_vals},
+        {'sample': np.abs(fourier_transform), 'frequencies': frequencies},
+        # *[{'sample':bucket['amplitudes']-((i+1)*25), 'frequencies': frequencies} for i, bucket in enumerate(buckets)],
+        # {'sample': sounds['mono_data'], 'x0': 500},
+        # {'sample': freq_magnitudes, 'frequencies': frequencies},
+        # {'sample': phase_magnitudes, 'frequencies': frequencies},
+        # {'sample': np.divide(1, np.diff(frequencies)), 'frequencies': frequencies[:-1]}
+    )
     # graph_samples({'sample':np.fromfunction(lambda x: inv_heartbeat(25, 0.01)(x/10), (1000,)), 'frame_rate':10})
     print('end of program')
